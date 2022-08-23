@@ -1,8 +1,7 @@
 name: E2E Test
 on:
   schedule:
-  # Hammer the backend by running this every 5mins 😈
-    - cron: '*/5 * * * *'
+    - cron: '0 0 * * *'
   push:
 
 jobs:
@@ -27,8 +26,9 @@ jobs:
     strategy:
       matrix:
         node-version: [14, 16]
+        record: ["record", "no-record"]
       fail-fast: false
-    name: 👀 Smoke test / ubuntu-latest / node ${{ matrix.node-version }} latest
+    name: 👀 Smoke test / ubuntu-latest / node ${{ matrix.node-version }} / ${{ matrix.record }}
     runs-on: ubuntu-latest
     env:
       REDWOOD_CI: 1
@@ -69,6 +69,7 @@ jobs:
           PROJECT_PATH: ${{ steps.setup_test_project.outputs.test_project_path }}
           REDWOOD_DISABLE_TELEMETRY: 1
           RECORD_REPLAY_METADATA_TEST_RUN_TITLE: Smoke test / ubuntu-latest / node ${{ matrix.node-version }} latest
+          RECORD_REPLAY_NO_RECORD: ${{ matrix.record == 'no-record' && '1' || '' }}
 
       - name: Run `rw info`
         run: |
