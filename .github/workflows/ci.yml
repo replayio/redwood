@@ -1,7 +1,10 @@
-name: ⚙️ CI
 
+name: E2E Test
 on:
-  pull_request
+  schedule:
+  # Hammer the backend by running this every 5mins 😈
+    - cron: '*/5 * * * *'
+  push:
 
 jobs:
   check:
@@ -63,10 +66,11 @@ jobs:
 
       - name: Run smoke tests on 'rw dev', 'rw serve', 'rw storybook'
         working-directory: ./tasks/smoke-test
-        run: npx playwright test
+        run: npx playwright test --project replay-chromium --reporter=@replayio/playwright/reporter,line
         env:
           PROJECT_PATH: ${{ steps.setup_test_project.outputs.test_project_path }}
           REDWOOD_DISABLE_TELEMETRY: 1
+          RECORD_REPLAY_METADATA_TEST_RUN_TITLE: Smoke test / ${{ matrix.os }} / node ${{ matrix.node-version }} latest
 
       - name: Run `rw info`
         run: |
@@ -151,3 +155,8 @@ jobs:
           yarn rw g sdl DoesNotExist
         working-directory: ${{ steps.setup_test_project.outputs.test_project_path }}
         continue-on-error: true
+      - name: Upload Replays
+        if: always()
+        uses: replayio/action-upload@v0.4.3
+        with:
+          api-key: rwk_CtKeIb2wvaYrwIj4j5DEoTDjNrC1xJsL40OzkaXpuO0
