@@ -159,4 +159,5 @@ jobs:
         if: always()
         uses: replayio/action-upload@v0.4.3
         with:
+          public: true
           api-key: rwk_RZ7vH8VGJKYQzYpOexaC2IdHRh3GPy0xJcLEUDobdkX
