@@ -1,4 +1,5 @@
 import type { PlaywrightTestConfig } from '@playwright/test'
+import { devices } from '@playwright/test'
 import { devices as replayDevices } from '@replayio/playwright'
 
 // See https://playwright.dev/docs/test-configuration#global-configuration
@@ -8,6 +9,10 @@ const config: PlaywrightTestConfig = {
     timeout: 10 * 1000,
   },
   projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chromium'] },
+    },
     {
       name: 'replay-chromium',
       use: { ...(replayDevices['Replay Chromium'] as any) },
