@@ -4,7 +4,7 @@ on:
     - cron: '0 0 * * *'
   push:
   workflow_dispatch:
-  
+
 env:
   DEBUG: replay:cli:*
 
@@ -25,9 +25,12 @@ jobs:
       - name: ✅ Check constraints, dependencies, and package.json's
         uses: ./tasks/check
 
-  playwright-record:
+  record:
     needs: check
     runs-on: ubuntu-latest
+    outputs:
+      recordDuration: ${{steps.end.outputs.recordDuration}}
+      uploadDuration: ${{steps.end.outputs.uploadDuration}}
     env:
       REDWOOD_CI: 1
       REDWOOD_VERBOSE_TELEMETRY: 1
@@ -60,6 +63,11 @@ jobs:
           yarn rw prerender --verbose
         working-directory: ${{ steps.setup_test_project.outputs.test_project_path }}
 
+      - name: Set test start
+        if: always()
+        id: recordStart
+        run: echo "time=`date +%s`" >> $GITHUB_OUTPUT
+
       - name: Run smoke tests on 'rw dev', 'rw serve', 'rw storybook'
         working-directory: ./tasks/smoke-test
         run: npx playwright test --project replay-chromium --reporter=@replayio/playwright/reporter,line
@@ -70,14 +78,25 @@ jobs:
           RECORD_REPLAY_TEST_METRICS: 1
           RECORD_REPLAY_WEBHOOK_URL: ${{ secrets.RECORD_REPLAY_WEBHOOK_URL }}
 
+      - name: Set upload start
+        if: always()
+        id: uploadStart
+        run: echo "time=`date +%s`" >> $GITHUB_OUTPUT
+
       - name: Upload Replays
         if: always()
         uses: replayio/action-upload@v0.4.3
         with:
           public: true
           api-key: rwk_RZ7vH8VGJKYQzYpOexaC2IdHRh3GPy0xJcLEUDobdkX
+      - name: Set duration in output
+        id: end
+        if: always()
+        run: |
+          echo "recordDuration=$((${{ steps.uploadStart.outputs.time }} - ${{ steps.recordStart.outputs.time }}))" >> $GITHUB_OUTPUT
+          echo "uploadDuration=$((`date +%s` - ${{ steps.uploadStart.outputs.time }}))" >> $GITHUB_OUTPUT
 
-  playwright-no-record:
+  no-record:
     needs: check
     runs-on: ubuntu-latest
     env:
@@ -122,7 +141,7 @@ jobs:
           RECORD_REPLAY_NO_RECORD: 1
           RECORD_REPLAY_TEST_METRICS: 1
           RECORD_REPLAY_WEBHOOK_URL: ${{ secrets.RECORD_REPLAY_WEBHOOK_URL }}
-  playwright-original:
+  original:
     needs: check
     runs-on: ubuntu-latest
     env:
@@ -130,6 +149,8 @@ jobs:
       REDWOOD_VERBOSE_TELEMETRY: 1
       # This makes sure that playwright dependencies are cached in node_modules.
       PLAYWRIGHT_BROWSERS_PATH: 0
+    outputs:
+     duration: ${{steps.end.outputs.duration}}
     steps:
       - uses: actions/checkout@v3
       - name: 🧶 Setup job
@@ -157,8 +178,33 @@ jobs:
           yarn rw prerender --verbose
         working-directory: ${{ steps.setup_test_project.outputs.test_project_path }}
 
+      - name: Set test start
+        if: always()
+        id: start
+        run: echo "time=`date +%s`" >> $GITHUB_OUTPUT
+
       - name: Run smoke tests on 'rw dev', 'rw serve', 'rw storybook'
         working-directory: ./tasks/smoke-test
         run: npx playwright test --project chromium
         env:
           PROJECT_PATH: ${{ steps.setup_test_project.outputs.test_project_path }}
+      - name: Set duration in output
+        if: always()
+        id: end
+        run: echo "duration=$((`date +%s` - ${{ steps.start.outputs.time }}))" >> $GITHUB_OUTPUT
+
+  upload-benchmarks:
+    name: Upload benchmarks
+    runs-on: ubuntu-latest
+    needs: [record, original]
+    if: always()
+    steps:
+      - run: |
+          echo "Original Duration: ${{ needs.original.outputs.duration }}"
+          echo "Record Duration: ${{ needs.record.outputs.recordDuration }}"
+          echo "Upload Duration: ${{ needs.record.outputs.uploadDuration }}"
+      - name: Fetch API Data 📦
+        uses: JamesIves/fetch-api-data-action@v2
+        with:
+          endpoint: "https://telemetry.replay.io"
+          configuration: '{ "method": "POST", "body": {"event": "Webhook", "source": "metrics", "name": "action-finished", "project": "redwood", "originalDuration": "${{ needs.original.outputs.duration }}", "recordDuration": "${{ needs.record.outputs.recordDuration }}", "uploadDuration": "${{ needs.record.outputs.uploadDuration }}"} }'
